@@ -1,0 +1,5 @@
+dist/
+lib/
+utils/zepto.min.js
+coverage/
+test/__mocks__
