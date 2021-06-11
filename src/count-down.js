@@ -1,72 +1,19 @@
-import { EventHub } from './event-hub';
+import EventHub from './event-hub';
 
 export default class CountDown {
     constructor(opts) {
         this.opts = opts;
-        this.dur = 0;
 
         this.eventHub = EventHub.createEvents(this);
-        this.initdur();
+        this.init();
+        this.run();
     }
 
-    async initdur() {
+    init() {
         const { date } = this.opts;
-        const timestamp = this.getTimeStamp(date);
-        const now = await this.getServerTime();
+        const timestamp = this.getTimestamp(date);
 
-        this.dur = timestamp - now;
         this.timestamp = timestamp;
-        this.run(this.dur);
-    }
-
-    getDateObj(dur) {
-        const ss = 1000;
-        const mi = ss * 60;
-        const hh = mi * 60;
-        const dd = hh * 24;
-
-        const day = Math.max(parseInt(dur / dd, 10), 0);
-        const hour = Math.max(parseInt((dur - (day * dd)) / hh, 10), 0);
-        const minute = Math.max(parseInt((dur - (day * dd) - (hour * hh)) / mi, 10), 0);
-        const second = Math.max(parseInt((dur - (day * dd) - (hour * hh) - (minute * mi)) / ss, 10), 0);
-
-        return {
-            day,
-            hour: hour.toString().padStart(2, '0'),
-            minute: minute.toString().padStart(2, '0'),
-            second: second.toString().padStart(2, '0'),
-        };
-    }
-
-    run(dur) {
-        const self = this;
-        const start = Date.now();
-        let count = 0;
-
-        if (dur <= 0) {
-            this.emitEnd();
-
-            return;
-        }
-
-        this.emitStart();
-
-        this.reqAniFrame = requestAnimationFrame(function step() {
-            const time = Date.now() - start;
-            const p = time / dur;
-
-            if (p < 1) {
-                const isRun = Math.ceil(time / 1000) > count;
-                if (isRun) {
-                    count += 1;
-                    const data = self.getDateObj(dur - (Date.now() - start));
-                    self.emitRun(data);
-                }
-                self.reqAniFrame = requestAnimationFrame(step);
-            } else {
-                self.emitEnd();
-            }
-        });
     }
 
     emitRun(data) {
@@ -85,14 +32,105 @@ export default class CountDown {
         cancelAnimationFrame(this.reqAniFrame);
     }
 
-    async getServerTime() {
-        return 12233333333; //服务端接口
+    update(opts = {}) {
+        this.opts = { ...this.opts, ...opts }
+
+        this.cancel();
+        this.init();
+        this.run();
     }
 
-    getTimeStamp(str) {
-        const android = str.replace(/-/g, '/');
-        const ios = str.replace(/\//g, '-');
+    async run() {
+        const now = await this.getCurrentTime();
+        const dur = this.timestamp - now;
+        const self = this;
+        const start = Date.now();
 
-        return Date.parse(android) || Date.parse(ios);
+        if (dur <= 0) {
+            this.emitEnd();
+
+            return;
+        }
+
+        this.emitStart();
+
+        let count = 0;
+        this.reqAniFrame = requestAnimationFrame(function step() {
+            const difference = Date.now() - start;
+            const p = difference / dur;
+
+            if (p < 1) {
+                const isRun = Math.ceil(difference / 1000) > count;
+                if (isRun) {
+                    count += 1;
+                    const data = self.getDateObj(dur - difference);
+                    self.emitRun(data);
+                }
+                self.reqAniFrame = requestAnimationFrame(step);
+            } else {
+                self.emitEnd();
+            }
+        });
+    }
+
+    /**
+     * 获取当前时间戳
+     * @returns 
+     */
+    async getCurrentTime() {
+        const { currentTime } = this.opts;
+
+        // 没传当前日期，默认使用Date.now()
+        if (!currentTime) {
+            return Date.now();
+        }
+
+        // 传了字符串类型，尝试转成时间戳
+        if (typeof currentTime === 'string') {
+            return this.getTimestamp(currentTime);
+        }
+
+        // 如果为函数，则使用其返回值
+        if (typeof currentTime === 'function') {
+            const time = await currentTime();
+
+            return time;
+        }
+
+        return currentTime;
+    }
+
+    getTimestamp(timeStr) {
+        if (typeof strtimeStr === 'number') {
+            return timeStr;
+        }
+
+        const android = timeStr.replace(/-/g, '/');
+        const ios = timeStr.replace(/\//g, '-');
+
+        return new Date(android).getTime() || new Date(ios).getTime();
+    }
+
+    formatStr(str) {
+        return str.toString().padStart(2, '0');
+    }
+
+    getDateObj(dur) {
+        const ss = 1000;
+        const mi = ss * 60;
+        const hh = mi * 60;
+        const dd = hh * 24;
+
+        const day = Math.max(parseInt(dur / dd, 10), 0);
+        const hour = Math.max(parseInt((dur - (day * dd)) / hh, 10), 0);
+        const minute = Math.max(parseInt((dur - (day * dd) - (hour * hh)) / mi, 10), 0);
+        const second = Math.max(parseInt((dur - (day * dd) - (hour * hh) - (minute * mi)) / ss, 10), 0);
+
+        return {
+            day,
+            hour: this.formatStr(hour),
+            minute: this.formatStr(minute),
+            second: this.formatStr(second)
+        };
     }
 };
